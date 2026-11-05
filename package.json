@@ -1,0 +1,43 @@
+{
+  "name": "react-html",
+  "version": "0.1.0",
+  "description": "Engine to convert React/JSX to pure HTML with selective reactive island compilation",
+  "type": "module",
+  "bin": {
+    "react-html": "./bin/react-html.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "node --test tests/**/*.test.mjs"
+  },
+  "keywords": [
+    "react",
+    "html",
+    "ssg",
+    "static-site-generator",
+    "islands-architecture",
+    "pure-html"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "esbuild": "^0.25.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
