@@ -175,6 +175,172 @@ describe('react-html Engine Test Suite', () => {
     });
   });
 
+  describe('Island Auto-Discovery (Zero-Boilerplate)', () => {
+    test('detects island files and extracts clean names', async () => {
+      const { isIslandFile, getIslandName } = await import('../dist/index.js');
+      assert.ok(isIslandFile('src/components/Counter.island.tsx'));
+      assert.ok(isIslandFile('/project/islands/Modal.tsx'));
+      assert.ok(isIslandFile('src/islands/dropdown-menu.jsx'));
+      assert.ok(!isIslandFile('src/components/Header.tsx'));
+      assert.ok(!isIslandFile('node_modules/pkg/Counter.island.tsx'));
+
+      assert.equal(getIslandName('src/components/Counter.island.tsx'), 'Counter');
+      assert.equal(getIslandName('islands/dropdown-menu.island.jsx'), 'DropdownMenu');
+      assert.equal(getIslandName('src/islands/user_profile.tsx'), 'UserProfile');
+    });
+
+    test('auto-transforms pure export default function into an island', async () => {
+      const { transformIslandSource } = await import('../dist/index.js');
+      const input = `
+import React, { useState } from 'react';
+export default function Clicker({ start = 0 }) {
+  const [val, setVal] = useState(start);
+  return <button onClick={() => setVal(v => v + 1)}>{val}</button>;
+}
+      `;
+
+      const transformed = transformIslandSource(input, '/app/src/components/Clicker.island.tsx');
+      assert.ok(transformed.includes('__react_html_auto_island__'), 'Should include island wrapper');
+      assert.ok(transformed.includes('"Clicker"'), 'Should infer island name');
+      assert.ok(transformed.includes('export default __react_html_wrapped_island__'));
+      assert.ok(transformed.includes('export { __react_html_wrapped_island__ as Clicker }'));
+    });
+
+    test('end-to-end build with pure export default island (zero boilerplate)', async () => {
+      const autoFixtureDir = path.resolve(process.cwd(), '.auto-island-fixture');
+      const outDir = path.join(autoFixtureDir, 'dist');
+
+      try {
+        await fs.mkdir(path.join(autoFixtureDir, 'src/pages'), { recursive: true });
+        await fs.mkdir(path.join(autoFixtureDir, 'src/components'), { recursive: true });
+
+        // Pure component with zero react-html imports or island() wrapping
+        await fs.writeFile(
+          path.join(autoFixtureDir, 'src/components/PureCounter.island.tsx'),
+          `
+          import React, { useState } from 'react';
+          export default function PureCounter({ count = 10 }) {
+            const [c, setC] = useState(count);
+            return <button onClick={() => setC(n => n + 1)}>Auto Island: {c}</button>;
+          }
+          `
+        );
+
+        // Page importing it directly
+        await fs.writeFile(
+          path.join(autoFixtureDir, 'src/pages/index.tsx'),
+          `
+          import React from 'react';
+          import PureCounter from '../components/PureCounter.island.js';
+          export default function Index() {
+            return <div><PureCounter count={42} /></div>;
+          }
+          `
+        );
+
+        const result = await build({
+          root: autoFixtureDir,
+          outDir: 'dist',
+          minify: true
+        });
+
+        assert.equal(result.pages.length, 1);
+        assert.equal(result.islands.length, 1);
+
+        const html = await fs.readFile(path.join(outDir, 'index.html'), 'utf8');
+        assert.ok(html.includes('data-island="PureCounter"'), 'HTML should have island container');
+        assert.ok(html.includes('Auto Island: <!-- -->42'), 'HTML should have SSR pre-rendered content');
+        assert.ok(html.includes('<script type="module" src="/assets/islands/PureCounter.js">'), 'Script should be injected');
+
+        const bundleExists = await fs.stat(path.join(outDir, 'assets/islands/PureCounter.js')).then(() => true).catch(() => false);
+        assert.ok(bundleExists, 'Client bundle should be generated');
+      } finally {
+        await fs.rm(autoFixtureDir, { recursive: true, force: true });
+      }
+    });
+
+    test('multi-island code splitting produces tiny island bundles (< 2 KB)', async () => {
+      const splitFixtureDir = path.resolve(process.cwd(), '.split-test-fixture');
+      const outDir = path.join(splitFixtureDir, 'dist');
+
+      try {
+        await fs.mkdir(path.join(splitFixtureDir, 'src/pages'), { recursive: true });
+        await fs.mkdir(path.join(splitFixtureDir, 'src/components'), { recursive: true });
+
+        await fs.writeFile(
+          path.join(splitFixtureDir, 'src/components/A.island.tsx'),
+          `import React, { useState } from 'react'; export default function A() { const [v] = useState(1); return <div>{v}</div>; }`
+        );
+        await fs.writeFile(
+          path.join(splitFixtureDir, 'src/components/B.island.tsx'),
+          `import React, { useState } from 'react'; export default function B() { const [v] = useState(2); return <div>{v}</div>; }`
+        );
+        await fs.writeFile(
+          path.join(splitFixtureDir, 'src/pages/index.tsx'),
+          `import React from 'react'; import A from '../components/A.island.js'; import B from '../components/B.island.js'; export default function Page() { return <div><A /><B /></div>; }`
+        );
+
+        const result = await build({
+          root: splitFixtureDir,
+          outDir: 'dist',
+          minify: true
+        });
+
+        assert.ok(result.islands.length >= 3, 'Should produce 2 island files + shared chunk');
+
+        const statA = await fs.stat(path.join(outDir, 'assets/islands/A.js'));
+        const statB = await fs.stat(path.join(outDir, 'assets/islands/B.js'));
+
+        assert.ok(statA.size < 2048, `A.js should be under 2 KB, got ${statA.size} bytes`);
+        assert.ok(statB.size < 2048, `B.js should be under 2 KB, got ${statB.size} bytes`);
+
+        const chunkFiles = result.islands.filter(f => f.includes('chunks'));
+        assert.ok(chunkFiles.length > 0, 'Shared vendor chunk should be generated');
+      } finally {
+        await fs.rm(splitFixtureDir, { recursive: true, force: true });
+      }
+    });
+
+    test('clientRuntime: "preact" generates ultra-light framework chunk (< 35 KB)', async () => {
+      const preactFixtureDir = path.resolve(process.cwd(), '.preact-test-fixture');
+      const outDir = path.join(preactFixtureDir, 'dist');
+
+      try {
+        await fs.mkdir(path.join(preactFixtureDir, 'src/pages'), { recursive: true });
+        await fs.mkdir(path.join(preactFixtureDir, 'src/components'), { recursive: true });
+
+        await fs.writeFile(
+          path.join(preactFixtureDir, 'src/components/WidgetA.island.tsx'),
+          `import React, { useState } from 'react'; export default function WidgetA() { const [v] = useState('a'); return <div>{v}</div>; }`
+        );
+        await fs.writeFile(
+          path.join(preactFixtureDir, 'src/components/WidgetB.island.tsx'),
+          `import React, { useState } from 'react'; export default function WidgetB() { const [v] = useState('b'); return <div>{v}</div>; }`
+        );
+        await fs.writeFile(
+          path.join(preactFixtureDir, 'src/pages/index.tsx'),
+          `import React from 'react'; import WidgetA from '../components/WidgetA.island.js'; import WidgetB from '../components/WidgetB.island.js'; export default function Page() { return <div><WidgetA /><WidgetB /></div>; }`
+        );
+
+        const result = await build({
+          root: preactFixtureDir,
+          outDir: 'dist',
+          minify: true,
+          clientRuntime: 'preact'
+        });
+
+        const chunkFiles = result.islands.filter(f => f.includes('chunks'));
+        assert.ok(chunkFiles.length > 0, 'Shared Preact chunk should be generated');
+
+        const chunkStat = await fs.stat(chunkFiles[0]);
+        // Preact total chunk is ~25 KB vs ~220 KB for React 19
+        assert.ok(chunkStat.size < 35000, `Preact chunk should be under 35 KB, got ${chunkStat.size} bytes`);
+      } finally {
+        await fs.rm(preactFixtureDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('Server Application Library (createEngine)', () => {
     const fixtureDir = path.resolve(process.cwd(), '.server-test-fixture');
     const pagesDir = path.join(fixtureDir, 'src/pages');

@@ -1,8 +1,8 @@
 import React from 'react';
 import { Layout } from '../components/Layout.js';
 import { Card } from '../components/Card.js';
-import { Counter } from '../components/Counter.island.js';
-import { Tabs } from '../components/Tabs.island.js';
+import Counter from '../components/Counter.island.js';
+import Tabs from '../components/Tabs.island.js';
 
 export const title = 'react-html Demo - Pure HTML + Reactive Islands';
 export const description = 'Modular HTML with React and selective reactive island compilation';
@@ -39,6 +39,7 @@ export default function HomePage() {
       </p>
 
       {/* Reactive Counter Island */}
+      <Counter initialCount={10} step={2} />
       <Counter initialCount={10} step={2} />
 
       {/* Reactive Tabs Island */}

@@ -1,6 +1,6 @@
 {
-  "name": "react-html",
-  "version": "0.1.0",
+  "name": "@punkestu/react-html",
+  "version": "0.1.1",
   "description": "Engine to convert React/JSX to pure HTML with selective reactive island compilation",
   "type": "module",
   "bin": {
@@ -8,6 +8,9 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -35,6 +38,7 @@
   "license": "MIT",
   "dependencies": {
     "esbuild": "^0.25.0",
+    "preact": "^11.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

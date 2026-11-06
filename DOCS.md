@@ -16,12 +16,13 @@ A high-performance static engine to compile React/JSX to **pure, semantic HTML**
 1. [Overview & Philosophy](#1-overview--philosophy)
 2. [Getting Started & Setup](#2-getting-started--setup)
 3. [Modular HTML with React](#3-modular-html-with-react)
-4. [Reactive Islands Architecture](#4-reactive-islands-architecture)
+4. [Reactive Islands Architecture](#4-reactive-islands-architecture-auto-discovery)
 5. [Hydration Directives](#5-hydration-directives)
-6. [CLI Commands & Options](#6-cli-commands--options)
-7. [Programmatic API Reference](#7-programmatic-api-reference)
-8. [Server App Integration (Express, Fastify, Node HTTP)](#8-server-app-integration-express-fastify-node-http)
-9. [Best Practices & Troubleshooting](#9-best-practices--troubleshooting)
+6. [Island Size Optimization (Code Splitting & Preact)](#6-island-size-optimization-code-splitting--preact)
+7. [CLI Commands & Options](#7-cli-commands--options)
+8. [Programmatic API Reference](#8-programmatic-api-reference)
+9. [Server App Integration (Express, Fastify, Node HTTP)](#9-server-app-integration-express-fastify-node-http)
+10. [Best Practices & Troubleshooting](#10-best-practices--troubleshooting)
 
 ---
 
@@ -144,23 +145,24 @@ export default function AboutPage() {
 
 ---
 
-## 4. Reactive Islands Architecture
+## 4. Reactive Islands Architecture (Auto-Discovery)
 
 When a component needs client-side state (`useState`, `useEffect`, event listeners):
 
-### Step 1: Wrap Component with `island()`
+### Zero-Boilerplate Island Auto-Discovery
+
+Simply name your file `*.island.tsx` (or place it in an `islands/` directory) and **export default** your standard React component:
 
 ```tsx
-// src/components/Counter.island.tsx
+// src/components/Counter.island.tsx (or src/islands/Counter.tsx)
 import React, { useState } from 'react';
-import { island } from 'react-html';
 
 export interface CounterProps {
   initialCount?: number;
   step?: number;
 }
 
-function CounterComponent({ initialCount = 0, step = 1 }: CounterProps) {
+export default function Counter({ initialCount = 0, step = 1 }: CounterProps) {
   const [count, setCount] = useState(initialCount);
 
   return (
@@ -171,11 +173,9 @@ function CounterComponent({ initialCount = 0, step = 1 }: CounterProps) {
     </div>
   );
 }
-
-// Wrap with island helper providing Component, source path, and identifier
-export const Counter = island(CounterComponent, import.meta.url, 'Counter');
-export default Counter;
 ```
+
+The engine automatically discovers the island, infers its name, and prepares it for server rendering and client hydration.
 
 ### Step 2: Use in Any Page
 
@@ -183,7 +183,8 @@ export default Counter;
 // src/pages/index.tsx
 import React from 'react';
 import { Layout } from '../components/Layout.js';
-import { Counter } from '../components/Counter.island.js';
+import Counter from '../components/Counter.island.js';
+// Named import also works: import { Counter } from '../components/Counter.island.js';
 
 export default function HomePage() {
   return (
@@ -195,6 +196,8 @@ export default function HomePage() {
   );
 }
 ```
+
+> 💡 **Manual Island Wrapping**: You can also manually wrap components using `island(MyComponent, import.meta.url, 'MyComponent')` or use the `<Island component={...} />` wrapper if desired. Both approaches are fully supported.
 
 ### What Happens Behind the Scenes:
 1. **Server Phase**: The island is pre-rendered with `renderToString` and placed inside a container `<div data-island="Counter" data-props="...">`.
@@ -216,11 +219,42 @@ Fine-tune client performance using the `client` prop:
 
 ---
 
-## 6. CLI Commands & Options
+## 6. Island Size Optimization (Code Splitting & Preact)
+
+By default, `react-html` optimizes your client-side bundles using two strategies:
+
+### 1. Multi-Entry Code Splitting (Default)
+When bundling islands, `esbuild` performs a single multi-entry compilation pass with `splitting: true`.
+- Component-specific code (`Counter.js`, `Tabs.js`) drops down to **~800 bytes to 1 KB** each!
+- Common runtime code is extracted into a shared chunk (`chunks/chunk-[hash].js`).
+- The browser downloads the framework chunk once and caches it across all pages and islands.
+
+### 2. Preact Ultra-Light Mode (`--preact`)
+If you want ultra-compact bundles for mobile or low-bandwidth environments, you can enable Preact mode:
+
+```bash
+# Build with Preact ultra-light runtime (~24 KB uncompressed, ~8 KB gzipped)
+react-html build --preact
+```
+
+Programmatic usage:
+```ts
+const result = await build({
+  clientRuntime: 'preact', // 'react' (default) or 'preact'
+});
+```
+Your component code remains 100% standard React JSX—the compiler automatically aliases `react` and `react-dom` to `preact/compat` for client-side hydration!
+
+---
+
+## 7. CLI Commands & Options
 
 ```bash
 # Build static site to dist/
 react-html build
+
+# Build with Preact ultra-light mode
+react-html build --preact
 
 # Customize directories
 react-html build --pages src/pages --out dist --root .
@@ -236,7 +270,7 @@ react-html docs islands
 
 ---
 
-## 7. Programmatic API Reference
+## 8. Programmatic API Reference
 
 You can import and trigger `react-html` within custom build scripts or Node.js services:
 
@@ -248,7 +282,8 @@ const result = await build({
   root: process.cwd(),
   pagesDir: 'src/pages',
   outDir: 'dist',
-  minify: true
+  minify: true,
+  clientRuntime: 'preact' // optional ultra-light mode
 });
 console.log(`Generated ${result.pages.length} pages.`);
 
@@ -261,7 +296,7 @@ const server = await createDevServer({
 
 ---
 
-## 8. Server App Integration (Express, Fastify, Node HTTP)
+## 9. Server App Integration (Express, Fastify, Node HTTP)
 
 You can import and use `react-html` directly inside your backend server application:
 
@@ -308,7 +343,7 @@ server.listen(3000);
 
 ---
 
-## 9. Best Practices & Troubleshooting
+## 10. Best Practices & Troubleshooting
 
 ### Preventing Hydration Mismatches (React Error #418)
 - **Do not read browser globals during initial render**: Avoid `window.innerWidth` or `localStorage.getItem()` directly in the component body. Read them inside a `useEffect()`.

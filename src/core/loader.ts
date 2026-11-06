@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { isIslandFile, transformIslandSource } from './island-discovery.js';
 
 export interface LoadedPage {
   Component: React.ComponentType<any>;
@@ -15,22 +16,40 @@ export interface LoadedPage {
 
 const CACHE_DIR = path.resolve(process.cwd(), '.react-html/cache');
 
-// Plugin to replace import.meta.url with the real source file URL
-const importMetaUrlPlugin: esbuild.Plugin = {
-  name: 'preserve-import-meta-url',
+// Plugin to auto-wrap island components and preserve import.meta.url
+const islandAndMetaPlugin: esbuild.Plugin = {
+  name: 'island-auto-discovery-and-meta',
   setup(build) {
     build.onLoad({ filter: /\.(tsx|ts|jsx|js)$/ }, async (args) => {
       if (args.path.includes('node_modules')) return null;
+
       let text = await fs.readFile(args.path, 'utf8');
+      let modified = false;
+
+      // 1. Auto-wrap island files if they match island conventions
+      if (isIslandFile(args.path)) {
+        const transformed = transformIslandSource(text, args.path);
+        if (transformed !== text) {
+          text = transformed;
+          modified = true;
+        }
+      }
+
+      // 2. Preserve real file URL for any import.meta.url
       if (text.includes('import.meta.url')) {
         const fileUrl = pathToFileURL(args.path).href;
         text = text.replaceAll('import.meta.url', JSON.stringify(fileUrl));
+        modified = true;
+      }
+
+      if (modified) {
         const ext = path.extname(args.path).slice(1);
         return {
           contents: text,
           loader: (ext === 'js' || ext === 'jsx' || ext === 'ts' || ext === 'tsx') ? (ext as any) : 'tsx'
         };
       }
+
       return null;
     });
   }
@@ -53,7 +72,7 @@ export async function loadPageModule(pageFilePath: string): Promise<LoadedPage> 
     target: 'node22',
     packages: 'external',
     sourcemap: 'inline',
-    plugins: [importMetaUrlPlugin],
+    plugins: [islandAndMetaPlugin],
     loader: {
       '.tsx': 'tsx',
       '.ts': 'ts',

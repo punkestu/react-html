@@ -9,6 +9,9 @@ export { Island, island } from './core/island.js';
 export type { IslandProps } from './core/island.js';
 export { hydrateIsland } from './client/hydrate.js';
 export { renderPageToHtml } from './core/renderer.js';
+export { isIslandFile, getIslandName, transformIslandSource } from './core/island-discovery.js';
+export { bundleIslands } from './core/bundler.js';
+export type { ClientRuntime, BundlerOptions } from './core/bundler.js';
 export { createEngine, ReactHtmlEngine } from './server/engine.js';
 export type { EngineOptions } from './server/engine.js';
 
@@ -18,6 +21,7 @@ export interface BuildConfig {
   outDir?: string;
   publicDir?: string;
   minify?: boolean;
+  clientRuntime?: 'react' | 'preact';
 }
 
 export interface BuildResult {
@@ -123,7 +127,11 @@ export async function build(config: BuildConfig = {}): Promise<BuildResult> {
   // Bundle reactive islands
   let bundledIslands: string[] = [];
   if (allDiscoveredIslands.length > 0) {
-    bundledIslands = await bundleIslands(allDiscoveredIslands, { outDir, minify });
+    bundledIslands = await bundleIslands(allDiscoveredIslands, {
+      outDir,
+      minify,
+      clientRuntime: config.clientRuntime
+    });
   }
 
   // Cleanup compile cache

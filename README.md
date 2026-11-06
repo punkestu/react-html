@@ -33,8 +33,11 @@ npm link
 ### CLI Usage
 
 ```bash
-# Build static site to dist/
+# Build static site to dist/ (with code splitting, islands are ~800 B each)
 react-html build
+
+# Ultra-light Preact mode (drops total framework chunk to ~24 KB!)
+react-html build --preact
 
 # Build with custom pages or output directory
 react-html build --pages src/pages --out dist
@@ -114,20 +117,15 @@ export default function AboutPage() {
 
 ---
 
-### 2. Reactive Components (Islands Architecture)
+### 2. Reactive Components (Island Auto-Discovery)
 
-When a component needs client-side state and interactivity, wrap it with `island()`:
+When a component needs client-side state and interactivity, simply name the file `*.island.tsx` (or place it inside an `islands/` directory) and **export default** your pure React component. Zero wrapping required!
 
 ```tsx
-// src/components/Counter.island.tsx
+// src/components/Counter.island.tsx (or src/islands/Counter.tsx)
 import React, { useState } from 'react';
-import { island } from 'react-html';
 
-export interface CounterProps {
-  initial?: number;
-}
-
-function CounterComponent({ initial = 0 }: CounterProps) {
+export default function Counter({ initial = 0 }: { initial?: number }) {
   const [count, setCount] = useState(initial);
 
   return (
@@ -138,10 +136,6 @@ function CounterComponent({ initial = 0 }: CounterProps) {
     </div>
   );
 }
-
-// Export the island with its unique name and source path
-export const Counter = island(CounterComponent, import.meta.url, 'Counter');
-export default Counter;
 ```
 
 Now import and use it in any page just like a normal React component:
@@ -150,7 +144,7 @@ Now import and use it in any page just like a normal React component:
 // src/pages/index.tsx
 import React from 'react';
 import { Layout } from '../components/Layout.js';
-import { Counter } from '../components/Counter.island.js';
+import Counter from '../components/Counter.island.js';
 
 export default function HomePage() {
   return (
@@ -162,6 +156,8 @@ export default function HomePage() {
   );
 }
 ```
+
+> 💡 **Manual Island Wrapping (Optional)**: If you prefer explicit wrapping or have dynamic component references, `island(Component, import.meta.url, 'Name')` and `<Island component={...} />` are also supported for full backward compatibility.
 
 **What the engine does:**
 1. Renders the initial static markup during SSR for instant paint.
@@ -180,6 +176,20 @@ export default function HomePage() {
 | `load` (default) | `<Counter client="load" />` | Hydrates immediately on DOM ready |
 | `idle` | `<Counter client="idle" />` | Hydrates during browser idle time (`requestIdleCallback`) |
 | `visible` | `<Counter client="visible" />` | Hydrates when scrolled into view (`IntersectionObserver`) |
+
+---
+
+## ⚡ Tiny Island Bundles & Preact Ultra-Light Mode
+
+`react-html` uses ESM multi-entry code splitting and comment stripping to keep island bundles tiny:
+
+- **Code Splitting by Default**: Component logic is separated from runtime code. `Counter.js` and `Tabs.js` weigh only **~800 bytes to 1 KB** each, importing a shared vendor chunk that the browser caches across all pages.
+- **Ultra-Light Preact Mode (`--preact`)**: Want microscopic client bundles? Pass `--preact` to alias client hydration to `preact/compat`. You still write standard React JSX, but the shared runtime shrinks by **90%** down to **~24 KB uncompressed (~8 KB gzipped)**!
+
+```bash
+# Build with Preact ultra-light runtime
+react-html build --preact
+```
 
 ---
 

@@ -5,16 +5,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IslandInstance } from './island-registry.js';
 
+export type ClientRuntime = 'react' | 'preact';
+
 export interface BundlerOptions {
   outDir: string;
   minify?: boolean;
+  clientRuntime?: ClientRuntime;
 }
 
 export async function bundleIslands(
   islands: IslandInstance[],
   options: BundlerOptions
 ): Promise<string[]> {
-  const { outDir, minify = true } = options;
+  const { outDir, minify = true, clientRuntime = 'react' } = options;
   const islandsOutputDir = path.join(outDir, 'assets', 'islands');
   await fs.mkdir(islandsOutputDir, { recursive: true });
 
@@ -28,7 +31,9 @@ export async function bundleIslands(
     }
   }
 
-  const bundledFiles: string[] = [];
+  if (uniqueIslandsMap.size === 0) {
+    return [];
+  }
 
   // Locate hydrate module
   const currentDir = import.meta.dirname || path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +46,8 @@ export async function bundleIslands(
   if (!existsSync(islandClientPath)) {
     islandClientPath = path.resolve(currentDir, './island-client.ts');
   }
+
+  const entryPoints: Record<string, string> = {};
 
   for (const [name, island] of uniqueIslandsMap.entries()) {
     let resolvedEntry = island.entryPath;
@@ -64,51 +71,76 @@ import React from 'react';
 import { hydrateIsland } from ${JSON.stringify(hydratePath)};
 import * as Module from ${JSON.stringify(resolvedEntry)};
 
-const raw = Module.default || Module[${JSON.stringify(name)}] || Module;
+const mod: Record<string, any> = { ...Module };
+const raw = mod.default ?? mod[${JSON.stringify(name)}] ?? mod;
 const Component = (raw && raw.__rawComponent) ? raw.__rawComponent : raw;
 
 hydrateIsland(${JSON.stringify(name)}, Component);
 `;
     await fs.writeFile(virtualEntryFile, virtualEntryCode, 'utf8');
+    entryPoints[name] = virtualEntryFile;
+  }
 
-    const outfile = path.join(islandsOutputDir, `${name}.js`);
+  if (Object.keys(entryPoints).length === 0) {
+    return [];
+  }
 
-    await esbuild.build({
-      entryPoints: [virtualEntryFile],
-      outfile,
-      bundle: true,
-      format: 'esm',
-      platform: 'browser',
-      target: ['es2022'],
-      minify,
-      treeShaking: true,
-      define: {
-        'process.env.NODE_ENV': '"production"'
-      },
-      alias: {
-        'react-html': islandClientPath
-      },
-      plugins: [
-        {
-          name: 'redirect-react-html-imports',
-          setup(build) {
-            // Redirect any import of react-html or root index to island-client
-            build.onResolve({ filter: /(react-html|(\/|\\)(src|dist)(\/|\\)index(\.js|\.mjs|\.ts)?)$/ }, () => {
-              return { path: islandClientPath };
-            });
-          }
+  const alias: Record<string, string> = {
+    'react-html': islandClientPath,
+    ...(clientRuntime === 'preact'
+      ? {
+          react: 'preact/compat',
+          'react-dom/client': 'preact/compat/client',
+          'react-dom': 'preact/compat'
         }
-      ],
-      loader: {
-        '.tsx': 'tsx',
-        '.ts': 'ts',
-        '.jsx': 'jsx',
-        '.js': 'js',
-        '.css': 'empty'
-      }
-    });
+      : {})
+  };
 
-    bundledFiles.push(outfile);
+  const buildResult = await esbuild.build({
+    entryPoints,
+    outdir: islandsOutputDir,
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: ['es2022'],
+    splitting: true,
+    chunkNames: 'chunks/[name]-[hash]',
+    minify,
+    treeShaking: true,
+    legalComments: 'none',
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    },
+    alias,
+    plugins: [
+      {
+        name: 'redirect-react-html-imports',
+        setup(build) {
+          // Redirect any import of react-html or root index to island-client
+          build.onResolve(
+            { filter: /(react-html|@punkestu\/react-html|(\/|\\)(src|dist)(\/|\\)index(\.js|\.mjs|\.ts)?)$/ },
+            () => {
+              return { path: islandClientPath };
+            }
+          );
+        }
+      }
+    ],
+    loader: {
+      '.tsx': 'tsx',
+      '.ts': 'ts',
+      '.jsx': 'jsx',
+      '.js': 'js',
+      '.css': 'empty'
+    },
+    metafile: true
+  });
+
+  const bundledFiles: string[] = [];
+  if (buildResult.metafile) {
+    for (const outPath of Object.keys(buildResult.metafile.outputs)) {
+      bundledFiles.push(path.resolve(process.cwd(), outPath));
+    }
   }
 
   // Cleanup virtual entry files

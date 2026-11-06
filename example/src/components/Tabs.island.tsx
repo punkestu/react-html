@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { island } from '../../../src/index.js';
 
 export interface TabItem {
   id: string;
@@ -30,7 +29,7 @@ const defaultTabs: TabItem[] = [
   }
 ];
 
-function TabsComponent({ tabs = defaultTabs, defaultTab = 'features' }: TabsProps) {
+export default function Tabs({ tabs = defaultTabs, defaultTab = 'features' }: TabsProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const currentTab = tabs.find((t) => t.id === activeTab) || tabs[0];
 
@@ -54,6 +53,3 @@ function TabsComponent({ tabs = defaultTabs, defaultTab = 'features' }: TabsProp
     </div>
   );
 }
-
-export const Tabs = island(TabsComponent, import.meta.url, 'Tabs');
-export default Tabs;

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { loadPageModule } from '../core/loader.js';
 import { renderPageToHtml } from '../core/renderer.js';
-import { bundleIslands } from '../core/bundler.js';
+import { bundleIslands, ClientRuntime } from '../core/bundler.js';
 import { IslandInstance } from '../core/island-registry.js';
 
 export interface EngineOptions {
@@ -20,6 +20,8 @@ export interface EngineOptions {
   isProduction?: boolean;
   /** Base asset URL prefix (default: '/') */
   basePath?: string;
+  /** Client runtime for island hydration ('react' | 'preact', default: 'react') */
+  clientRuntime?: ClientRuntime;
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -44,6 +46,7 @@ export class ReactHtmlEngine {
   public readonly publicDir: string;
   public readonly isProduction: boolean;
   public readonly basePath: string;
+  public readonly clientRuntime: ClientRuntime;
 
   constructor(options: EngineOptions = {}) {
     this.root = path.resolve(options.root || process.cwd());
@@ -52,6 +55,7 @@ export class ReactHtmlEngine {
         ? options.isProduction
         : process.env.NODE_ENV === 'production';
     this.basePath = options.basePath || '/';
+    this.clientRuntime = options.clientRuntime || 'react';
 
     // Resolve distDir
     this.distDir = path.resolve(this.root, options.distDir || 'dist');
@@ -124,7 +128,8 @@ export class ReactHtmlEngine {
     if (islands.length > 0) {
       await bundleIslands(islands, {
         outDir: this.distDir,
-        minify: this.isProduction
+        minify: this.isProduction,
+        clientRuntime: this.clientRuntime
       });
     }
 

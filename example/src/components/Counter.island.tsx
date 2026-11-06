@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { island } from '../../../src/index.js';
 
 export interface CounterProps {
   initialCount?: number;
   step?: number;
 }
 
-function CounterComponent({ initialCount = 0, step = 1 }: CounterProps) {
+export default function Counter({ initialCount = 0, step = 1 }: CounterProps) {
   const [count, setCount] = useState(initialCount);
 
   return (
@@ -30,6 +29,3 @@ function CounterComponent({ initialCount = 0, step = 1 }: CounterProps) {
     </div>
   );
 }
-
-export const Counter = island(CounterComponent, import.meta.url, 'Counter');
-export default Counter;
