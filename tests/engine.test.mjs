@@ -174,5 +174,115 @@ describe('react-html Engine Test Suite', () => {
       assert.ok(ids.includes('troubleshooting'));
     });
   });
+
+  describe('Server Application Library (createEngine)', () => {
+    const fixtureDir = path.resolve(process.cwd(), '.server-test-fixture');
+    const pagesDir = path.join(fixtureDir, 'src/pages');
+    const distDir = path.join(fixtureDir, 'dist');
+
+    before(async () => {
+      await fs.mkdir(pagesDir, { recursive: true });
+      await fs.mkdir(distDir, { recursive: true });
+
+      // Create pre-built production HTML in dist
+      await fs.writeFile(
+        path.join(distDir, 'index.html'),
+        '<!DOCTYPE html><html><body><h1>PRE-BUILT PRODUCTION HTML</h1></body></html>'
+      );
+
+      // Create development source page in src/pages
+      await fs.writeFile(
+        path.join(pagesDir, 'index.tsx'),
+        `
+        import React from 'react';
+        export default function Home() {
+          return <h1>LIVE REBUILT DEV HTML</h1>;
+        }
+        `
+      );
+    });
+
+    after(async () => {
+      await fs.rm(fixtureDir, { recursive: true, force: true });
+    });
+
+    test('production mode: loads and returns pre-built static HTML from dist', async () => {
+      const { createEngine } = await import('../dist/index.js');
+      const engine = createEngine({
+        root: fixtureDir,
+        pagesDir,
+        distDir,
+        isProduction: true
+      });
+
+      const html = await engine.render('index');
+      assert.ok(html.includes('PRE-BUILT PRODUCTION HTML'), 'Production should return pre-built dist HTML');
+      assert.ok(!html.includes('LIVE REBUILT DEV HTML'));
+    });
+
+    test('development mode: dynamically rebuilds and returns fresh HTML string', async () => {
+      const { createEngine } = await import('../dist/index.js');
+      const engine = createEngine({
+        root: fixtureDir,
+        pagesDir,
+        distDir,
+        isProduction: false
+      });
+
+      const html = await engine.render('index');
+      assert.ok(html.includes('LIVE REBUILT DEV HTML'), 'Development should rebuild from source TSX');
+      assert.ok(!html.includes('PRE-BUILT PRODUCTION HTML'));
+
+      // Modify the source file on the fly
+      await fs.writeFile(
+        path.join(pagesDir, 'index.tsx'),
+        `
+        import React from 'react';
+        export default function Home() {
+          return <h1>UPDATED LIVE IN DEV</h1>;
+        }
+        `
+      );
+
+      // Re-render: should reflect the immediate update without server restart!
+      const updatedHtml = await engine.render('index');
+      assert.ok(updatedHtml.includes('UPDATED LIVE IN DEV'), 'Dev mode should reflect immediate code edits');
+    });
+
+    test('middleware: serves request via connect/express-compatible middleware', async () => {
+      const { createEngine } = await import('../dist/index.js');
+      const engine = createEngine({
+        root: fixtureDir,
+        pagesDir,
+        distDir,
+        isProduction: true
+      });
+
+      let statusCode = 0;
+      let headers = {};
+      let body = '';
+
+      const fakeReq = {
+        url: '/',
+        headers: { host: 'localhost:3000' }
+      };
+
+      const fakeRes = {
+        writeHead(status, h) {
+          statusCode = status;
+          headers = h;
+        },
+        end(data) {
+          body = data.toString();
+        }
+      };
+
+      await engine.middleware(fakeReq, fakeRes);
+
+      assert.equal(statusCode, 200);
+      assert.equal(headers['Content-Type'], 'text/html; charset=utf-8');
+      assert.ok(body.includes('PRE-BUILT PRODUCTION HTML'));
+    });
+  });
 });
 

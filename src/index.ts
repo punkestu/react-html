@@ -9,6 +9,8 @@ export { Island, island } from './core/island.js';
 export type { IslandProps } from './core/island.js';
 export { hydrateIsland } from './client/hydrate.js';
 export { renderPageToHtml } from './core/renderer.js';
+export { createEngine, ReactHtmlEngine } from './server/engine.js';
+export type { EngineOptions } from './server/engine.js';
 
 export interface BuildConfig {
   root?: string;

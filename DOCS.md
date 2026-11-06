@@ -20,7 +20,8 @@ A high-performance static engine to compile React/JSX to **pure, semantic HTML**
 5. [Hydration Directives](#5-hydration-directives)
 6. [CLI Commands & Options](#6-cli-commands--options)
 7. [Programmatic API Reference](#7-programmatic-api-reference)
-8. [Best Practices & Troubleshooting](#8-best-practices--troubleshooting)
+8. [Server App Integration (Express, Fastify, Node HTTP)](#8-server-app-integration-express-fastify-node-http)
+9. [Best Practices & Troubleshooting](#9-best-practices--troubleshooting)
 
 ---
 
@@ -260,7 +261,54 @@ const server = await createDevServer({
 
 ---
 
-## 8. Best Practices & Troubleshooting
+## 8. Server App Integration (Express, Fastify, Node HTTP)
+
+You can import and use `react-html` directly inside your backend server application:
+
+```ts
+import express from 'express';
+import { createEngine } from 'react-html';
+// or: import { createEngine } from 'react-html/server';
+
+const app = express();
+
+const engine = createEngine({
+  pagesDir: 'src/pages',
+  distDir: 'dist',
+  // Automatically detects process.env.NODE_ENV === 'production'
+});
+
+// 1. Connect / Express Middleware
+// In Production: finds and serves pre-built static HTML from dist/
+// In Development: dynamically rebuilds TSX on the fly and returns the fresh HTML string!
+app.use(engine.middleware);
+
+// 2. Programmatic Route Rendering
+app.get('/dashboard', async (req, res) => {
+  const html = await engine.render('dashboard', { user: req.user });
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// 3. Native Node HTTP Server
+import http from 'node:http';
+const server = http.createServer(engine.handle);
+server.listen(3000);
+```
+
+### Environment Behavior:
+- **`process.env.NODE_ENV === 'production'`**:
+  - Automatically searches for pre-built `.html` files in `distDir` (`dist/index.html`, `dist/about.html`).
+  - Streams them immediately to clients with 0 rebuild overhead.
+  - Serves static assets (`dist/assets/islands/*.js`, `dist/styles.css`).
+- **`process.env.NODE_ENV !== 'production'` (Development)**:
+  - Dynamically rebuilds the corresponding `.tsx` page on each request.
+  - Bundles any reactive islands on-the-fly.
+  - Returns the fresh HTML string directly in the response—code edits in `src/pages` or `src/components` are reflected instantly on reload without server restarts!
+
+---
+
+## 9. Best Practices & Troubleshooting
 
 ### Preventing Hydration Mismatches (React Error #418)
 - **Do not read browser globals during initial render**: Avoid `window.innerWidth` or `localStorage.getItem()` directly in the component body. Read them inside a `useEffect()`.
