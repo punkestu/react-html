@@ -17,12 +17,13 @@ A high-performance static engine to compile React/JSX to **pure, semantic HTML**
 2. [Getting Started & Setup](#2-getting-started--setup)
 3. [Modular HTML with React](#3-modular-html-with-react)
 4. [Reactive Islands Architecture](#4-reactive-islands-architecture-auto-discovery)
-5. [Hydration Directives](#5-hydration-directives)
-6. [Island Size Optimization (Code Splitting & Preact)](#6-island-size-optimization-code-splitting--preact)
-7. [CLI Commands & Options](#7-cli-commands--options)
-8. [Programmatic API Reference](#8-programmatic-api-reference)
-9. [Server App Integration (Express, Fastify, Node HTTP)](#9-server-app-integration-express-fastify-node-http)
-10. [Best Practices & Troubleshooting](#10-best-practices--troubleshooting)
+5. [Pure Vanilla DOM Islands (Zero-React Client)](#5-pure-vanilla-dom-islands-zero-react-client)
+6. [Hydration Directives](#6-hydration-directives)
+7. [Island Size Optimization (Code Splitting & Preact)](#7-island-size-optimization-code-splitting--preact)
+8. [CLI Commands & Options](#8-cli-commands--options)
+9. [Programmatic API Reference](#9-programmatic-api-reference)
+10. [Server App Integration (Express, Fastify, Node HTTP)](#10-server-app-integration-express-fastify-node-http)
+11. [Best Practices & Troubleshooting](#11-best-practices--troubleshooting)
 
 ---
 
@@ -207,7 +208,66 @@ export default function HomePage() {
 
 ---
 
-## 5. Hydration Directives
+## 5. Pure Vanilla DOM Islands (Zero-React Client)
+
+If you love authoring layouts and components in React JSX on the server, but want **absolute zero React/VDOM runtime on the client**, you can build a **Pure Vanilla DOM Island**!
+
+### How to Author a Vanilla Island
+
+In your island file, provide both:
+1. `export default function`: The standard React JSX markup rendered on the server into pure HTML.
+2. `export function client(element, props)`: A pure native DOM controller that attaches event listeners directly to the DOM.
+
+```tsx
+// src/components/VanillaCounter.island.tsx
+import React from 'react';
+
+// Server-side: React JSX for modular HTML composition
+export default function VanillaCounter({ initialCount = 0, step = 1 }: { initialCount?: number; step?: number }) {
+  return (
+    <div className="counter-box">
+      <span className="counter-value">{initialCount}</span>
+      <div className="actions">
+        <button data-action="dec">- {step}</button>
+        <button data-action="reset">Reset</button>
+        <button data-action="inc">+ {step}</button>
+      </div>
+    </div>
+  );
+}
+
+// Client-side: Pure native DOM controller (No React/VDOM bundled!)
+export function client(el: HTMLElement, props: { initialCount?: number; step?: number }) {
+  let count = props.initialCount || 0;
+  const step = props.step || 1;
+  const display = el.querySelector('.counter-value');
+
+  el.querySelector('[data-action="dec"]')?.addEventListener('click', () => {
+    count -= step;
+    if (display) display.textContent = String(count);
+  });
+
+  el.querySelector('[data-action="reset"]')?.addEventListener('click', () => {
+    count = 0;
+    if (display) display.textContent = '0';
+  });
+
+  el.querySelector('[data-action="inc"]')?.addEventListener('click', () => {
+    count += step;
+    if (display) display.textContent = String(count);
+  });
+}
+```
+
+### Key Advantages
+- **0 KB React / 0 KB ReactDOM / 0 KB Preact**: React is completely stubbed out during the client build pass.
+- **Zero Framework Chunks**: Generates a self-contained, standalone `.js` file with 0 chunk imports (~1.2 KB uncompressed, ~450 B gzipped).
+- **Zero VDOM Overhead**: Directly binds native event listeners to existing server-rendered HTML nodes with zero hydration lag.
+- **Directives Supported**: Directives (`client="load"`, `client="idle"`, `client="visible"`) execute the `client` function at the exact right moment.
+
+---
+
+## 6. Hydration Directives
 
 Fine-tune client performance using the `client` prop:
 
@@ -219,7 +279,7 @@ Fine-tune client performance using the `client` prop:
 
 ---
 
-## 6. Island Size Optimization (Code Splitting & Preact)
+## 7. Island Size Optimization (Code Splitting & Preact)
 
 By default, `react-html` optimizes your client-side bundles using two strategies:
 
@@ -233,7 +293,7 @@ When bundling islands, `esbuild` performs a single multi-entry compilation pass 
 If you want ultra-compact bundles for mobile or low-bandwidth environments, you can enable Preact mode:
 
 ```bash
-# Build with Preact ultra-light runtime (~24 KB uncompressed, ~8 KB gzipped)
+# Build with Preact ultra-light client runtime (~24 KB total chunk!)
 react-html build --preact
 ```
 
@@ -247,7 +307,7 @@ Your component code remains 100% standard React JSX—the compiler automatically
 
 ---
 
-## 7. CLI Commands & Options
+## 8. CLI Commands & Options
 
 ```bash
 # Build static site to dist/
@@ -270,7 +330,7 @@ react-html docs islands
 
 ---
 
-## 8. Programmatic API Reference
+## 9. Programmatic API Reference
 
 You can import and trigger `react-html` within custom build scripts or Node.js services:
 
@@ -296,7 +356,7 @@ const server = await createDevServer({
 
 ---
 
-## 9. Server App Integration (Express, Fastify, Node HTTP)
+## 10. Server App Integration (Express, Fastify, Node HTTP)
 
 You can import and use `react-html` directly inside your backend server application:
 
@@ -343,7 +403,7 @@ server.listen(3000);
 
 ---
 
-## 10. Best Practices & Troubleshooting
+## 11. Best Practices & Troubleshooting
 
 ### Preventing Hydration Mismatches (React Error #418)
 - **Do not read browser globals during initial render**: Avoid `window.innerWidth` or `localStorage.getItem()` directly in the component body. Read them inside a `useEffect()`.

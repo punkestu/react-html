@@ -167,6 +167,53 @@ export default function HomePage() {
 
 ---
 
+### 3. Pure Vanilla DOM Islands (Zero-React Client Compilation)
+
+Want client-side interactivity but **zero React or VDOM runtime on the client**?
+
+You can write standard React JSX on the server for DRY markup, and export a native `client(element, props)` controller function in the same island file:
+
+```tsx
+// src/components/VanillaCounter.island.tsx
+import React from 'react';
+
+// 1. Server: Pure modular HTML via standard React JSX
+export default function VanillaCounter({ initialCount = 0, step = 1 }: { initialCount?: number; step?: number }) {
+  return (
+    <div className="counter-box">
+      <span className="counter-value">{initialCount}</span>
+      <button data-action="dec">- {step}</button>
+      <button data-action="inc">+ {step}</button>
+    </div>
+  );
+}
+
+// 2. Client: Pure native DOM controller (Zero React/VDOM runtime!)
+export function client(el: HTMLElement, props: { initialCount?: number; step?: number }) {
+  let count = props.initialCount || 0;
+  const step = props.step || 1;
+  const display = el.querySelector('.counter-value');
+
+  el.querySelector('[data-action="dec"]')?.addEventListener('click', () => {
+    count -= step;
+    if (display) display.textContent = String(count);
+  });
+
+  el.querySelector('[data-action="inc"]')?.addEventListener('click', () => {
+    count += step;
+    if (display) display.textContent = String(count);
+  });
+}
+```
+
+**Why this is huge:**
+- **0 KB React, 0 KB ReactDOM, 0 KB Preact**: The engine completely stubs React in the client bundle.
+- **Zero Chunk Imports**: Outputs a single, self-contained standalone `.js` file (~1 KB uncompressed, ~450 bytes gzipped).
+- **Zero Hydration Overhead**: Bypasses VDOM reconciliation and binds native event listeners directly to existing DOM nodes.
+- **Mix & Match**: You can use Pure Vanilla DOM islands and standard React/Preact islands in the very same project without conflict!
+
+---
+
 ## 🛠️ Hydration Directives
 
 `react-html` supports client loading directives to maximize performance:

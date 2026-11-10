@@ -3,6 +3,7 @@ import { Layout } from '../components/Layout.js';
 import { Card } from '../components/Card.js';
 import Counter from '../components/Counter.island.js';
 import Tabs from '../components/Tabs.island.js';
+import VanillaCounter from '../components/VanillaCounter.island.js';
 
 export const title = 'react-html Demo - Pure HTML + Reactive Islands';
 export const description = 'Modular HTML with React and selective reactive island compilation';
@@ -35,11 +36,13 @@ export default function HomePage() {
 
       <h2 style={{ marginBottom: '1rem' }}>Interactive Island Demos</h2>
       <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>
-        Below are two reactive islands embedded in pure static HTML:
+        Below are interactive islands embedded in pure static HTML:
       </p>
 
-      {/* Reactive Counter Island */}
-      <Counter initialCount={10} step={2} />
+      {/* Pure Vanilla DOM Island (Zero React, Zero Preact, ~180 Bytes) */}
+      <VanillaCounter initialCount={5} step={1} />
+
+      {/* Reactive Counter Island (Preact/React) */}
       <Counter initialCount={10} step={2} />
 
       {/* Reactive Tabs Island */}

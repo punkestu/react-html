@@ -450,5 +450,120 @@ export default function Clicker({ start = 0 }) {
       assert.ok(body.includes('PRE-BUILT PRODUCTION HTML'));
     });
   });
+
+  describe('Vanilla DOM Islands (Zero-React Client Compilation)', () => {
+    const vanillaFixtureDir = path.resolve(process.cwd(), '.vanilla-test-fixture');
+    const outDir = path.join(vanillaFixtureDir, 'dist');
+
+    before(async () => {
+      await fs.mkdir(path.join(vanillaFixtureDir, 'src/pages'), { recursive: true });
+      await fs.mkdir(path.join(vanillaFixtureDir, 'src/components'), { recursive: true });
+
+      // 1. Vanilla DOM Island (export default JSX + export function client)
+      await fs.writeFile(
+        path.join(vanillaFixtureDir, 'src/components/VanillaClicker.island.tsx'),
+        `
+        import React from 'react';
+
+        export default function VanillaClicker({ label = 'Clicks', start = 0 }: { label?: string; start?: number }) {
+          return (
+            <div className="vanilla-clicker">
+              <span className="count-display">{start}</span>
+              <button data-action="click">{label}</button>
+            </div>
+          );
+        }
+
+        export function client(el: HTMLElement, props: { label?: string; start?: number }) {
+          let count = props.start || 0;
+          const display = el.querySelector('.count-display');
+          el.querySelector('[data-action="click"]')?.addEventListener('click', () => {
+            count++;
+            if (display) display.textContent = String(count);
+          });
+        }
+        `
+      );
+
+      // 2. Standard React Island
+      await fs.writeFile(
+        path.join(vanillaFixtureDir, 'src/components/ReactCounter.island.tsx'),
+        `
+        import React, { useState } from 'react';
+
+        export default function ReactCounter({ initial = 10 }: { initial?: number }) {
+          const [val, setVal] = useState(initial);
+          return <button onClick={() => setVal(v => v + 1)}>React: {val}</button>;
+        }
+        `
+      );
+
+      // 3. Page using both Vanilla DOM Island and React Island
+      await fs.writeFile(
+        path.join(vanillaFixtureDir, 'src/pages/index.tsx'),
+        `
+        import React from 'react';
+        import VanillaClicker from '../components/VanillaClicker.island.js';
+        import ReactCounter from '../components/ReactCounter.island.js';
+
+        export default function IndexPage() {
+          return (
+            <div>
+              <h1>Mixed Islands Page</h1>
+              <VanillaClicker label="Tap Me" start={5} />
+              <ReactCounter initial={100} />
+            </div>
+          );
+        }
+        `
+      );
+    });
+
+    after(async () => {
+      await fs.rm(vanillaFixtureDir, { recursive: true, force: true });
+    });
+
+    test('builds vanilla DOM island with zero React runtime and standalone bundle', async () => {
+      const result = await build({
+        root: vanillaFixtureDir,
+        outDir: 'dist',
+        minify: true
+      });
+
+      assert.equal(result.pages.length, 1);
+      assert.ok(result.islands.length >= 2, 'Should generate bundles for both islands');
+
+      // 1. Verify HTML output
+      const html = await fs.readFile(path.join(outDir, 'index.html'), 'utf8');
+      assert.ok(html.includes('data-island="VanillaClicker"'), 'HTML contains vanilla island markup');
+      assert.ok(html.includes('data-island="ReactCounter"'), 'HTML contains react island markup');
+      assert.ok(html.includes('<script type="module" src="/assets/islands/VanillaClicker.js">'));
+      assert.ok(html.includes('<script type="module" src="/assets/islands/ReactCounter.js">'));
+
+      // 2. Verify VanillaClicker bundle:
+      const vanillaBundlePath = path.join(outDir, 'assets/islands/VanillaClicker.js');
+      const vanillaContent = await fs.readFile(vanillaBundlePath, 'utf8');
+      const vanillaStat = await fs.stat(vanillaBundlePath);
+
+      // Bundle size should be tiny (< 1.5 KB uncompressed)
+      assert.ok(vanillaStat.size < 1500, `Vanilla bundle should be < 1.5 KB, got ${vanillaStat.size} bytes`);
+
+      // MUST NOT contain any imports (completely self-contained, 0 chunks)
+      assert.ok(!vanillaContent.includes('import '), 'Vanilla bundle must not have import statements');
+      assert.ok(!vanillaContent.includes('from "'), 'Vanilla bundle must not import from external modules');
+      assert.ok(!vanillaContent.includes('from"'), 'Vanilla bundle must not import from external modules');
+
+      // MUST NOT contain React / ReactDOM runtime
+      assert.ok(!vanillaContent.includes('react-dom'), 'Must not reference react-dom');
+      assert.ok(!vanillaContent.includes('hydrateRoot'), 'Must not reference hydrateRoot');
+      assert.ok(!vanillaContent.includes('createElement'), 'Must not reference createElement');
+
+      // 3. Verify ReactCounter bundle:
+      const reactBundlePath = path.join(outDir, 'assets/islands/ReactCounter.js');
+      const reactContent = await fs.readFile(reactBundlePath, 'utf8');
+      // React island imports its chunk
+      assert.ok(reactContent.includes('import'), 'React island bundle should import shared chunk');
+    });
+  });
 });
 
