@@ -4,6 +4,16 @@ A blazing-fast engine to convert React/JSX components into **pure, semantic HTML
 
 Write DRY, modular HTML using React components without shipping any React runtime or JavaScript to the client by default.
 
+🌐 **Live Demo**: [https://soreaja.my.id](https://soreaja.my.id) &nbsp;|&nbsp; 🐙 **GitHub**: [https://github.com/punkestu/react-html](https://github.com/punkestu/react-html)
+
+---
+
+## 🌐 Live Example & Repository
+
+- **Live Demo**: Check out a real-world site built with `react-html` at [https://soreaja.my.id](https://soreaja.my.id)
+- **GitHub Repository**: Star, fork, and contribute on GitHub at [https://github.com/punkestu/react-html](https://github.com/punkestu/react-html)
+- **Local Examples**: Inspect the runnable demo project inside [`example/`](./example)
+
 ---
 
 ## 🌟 Why react-html?
