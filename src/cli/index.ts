@@ -40,6 +40,8 @@ Options:
   --client-runtime <type>   Island hydration runtime ('react' | 'preact', default: 'react')
   --preact                  Shortcut for '--client-runtime preact' (ultra-light ~4 KB runtime)
   --no-minify               Disable minification for island bundles
+  --no-webp                 Disable automatic WebP image conversion on build
+  --webp-quality <number>   WebP quality from 1 to 100 (default: 80)
   --root <path>             Project root directory (default: cwd)
 
 Docs Options:
@@ -62,6 +64,10 @@ Docs Options:
   const clientRuntime = (hasFlag('--preact') || getArgValue('--client-runtime') === 'preact')
     ? 'preact'
     : 'react';
+  const disableWebp = hasFlag('--no-webp') || getArgValue('--webp') === 'false';
+  const webpQualityStr = getArgValue('--webp-quality');
+  const webpQuality = webpQualityStr ? parseInt(webpQualityStr, 10) : undefined;
+  const webp = disableWebp ? false : (webpQuality ? { quality: webpQuality } : true);
 
   if (command === 'build') {
     console.log(`\n🚀 [react-html] Building static site (${clientRuntime === 'preact' ? '⚡ Preact Ultra-Light' : 'React 19'})...`);
@@ -72,13 +78,27 @@ Docs Options:
         pagesDir,
         outDir,
         minify,
-        clientRuntime
+        clientRuntime,
+        webp
       });
       console.log(`✅ [react-html] Build successful in ${Date.now() - startTime}ms`);
       console.log(`📄 Pages compiled (${result.pages.length}):`);
       result.pages.forEach(p => {
         console.log(`   - ${path.relative(root, p.output)}`);
       });
+
+      if (result.images && result.images.length > 0) {
+        const totalOrig = result.images.reduce((sum, img) => sum + img.originalSize, 0);
+        const totalWebp = result.images.reduce((sum, img) => sum + img.webpSize, 0);
+        const totalSaved = Math.max(0, totalOrig - totalWebp);
+        const totalPct = totalOrig > 0 ? ((totalSaved / totalOrig) * 100).toFixed(0) : '0';
+
+        console.log(`🖼️  WebP images optimized (${result.images.length}) - saved ${formatBytes(totalSaved)} (${totalPct}%):`);
+        for (const img of result.images) {
+          const relOut = path.relative(root, img.outputPath);
+          console.log(`   - ${relOut} (${formatBytes(img.webpSize)}, saved ${img.savedPercentage.toFixed(0)}%)`);
+        }
+      }
 
       if (result.islands.length > 0) {
         console.log(`🏝️  Reactive islands bundled (${result.islands.length}):`);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layout } from '../components/Layout.js';
 import { Card } from '../components/Card.js';
+import Counter from '../components/Counter.island.js';
 
 export const title = '100% Pure HTML - react-html';
 export const description = 'Demonstration of zero JavaScript pure HTML output';
@@ -50,6 +51,7 @@ export default function PurePage() {
           <li>Zero <code>&lt;script&gt;</code> tags.</li>
         </ul>
       </div>
+      <Counter />
     </Layout>
   );
 }

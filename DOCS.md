@@ -310,11 +310,17 @@ Your component code remains 100% standard React JSX—the compiler automatically
 ## 8. CLI Commands & Options
 
 ```bash
-# Build static site to dist/
+# Build static site to dist/ (with automatic WebP image optimization)
 react-html build
 
 # Build with Preact ultra-light mode
 react-html build --preact
+
+# Disable automatic WebP image conversion
+react-html build --no-webp
+
+# Custom WebP conversion quality (1-100)
+react-html build --webp-quality 85
 
 # Customize directories
 react-html build --pages src/pages --out dist --root .
@@ -343,9 +349,14 @@ const result = await build({
   pagesDir: 'src/pages',
   outDir: 'dist',
   minify: true,
-  clientRuntime: 'preact' // optional ultra-light mode
+  clientRuntime: 'preact', // optional ultra-light mode
+  webp: {
+    enabled: true,         // set false to disable WebP optimization (copies original formats)
+    quality: 80,           // 1 to 100 (default: 80)
+    keepOriginal: false    // preserve original non-webp images (default: false)
+  }
 });
-console.log(`Generated ${result.pages.length} pages.`);
+console.log(`Generated ${result.pages.length} pages, ${result.islands.length} islands, and ${result.images.length} webp images.`);
 
 // 2. Programmatic dev server
 const server = await createDevServer({

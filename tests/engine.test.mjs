@@ -129,6 +129,27 @@ describe('react-html Engine Test Suite', () => {
         }
         `
       );
+
+      // Create a public static asset
+      await fs.mkdir(path.join(testFixtureDir, 'public'), { recursive: true });
+      const sharp = (await import('sharp')).default;
+      await sharp({
+        create: {
+          width: 50,
+          height: 50,
+          channels: 4,
+          background: { r: 100, g: 150, b: 200, alpha: 1 }
+        }
+      }).png().toFile(path.join(testFixtureDir, 'public/banner.png'));
+
+      await sharp({
+        create: {
+          width: 40,
+          height: 40,
+          channels: 4,
+          background: { r: 50, g: 50, b: 50, alpha: 1 }
+        }
+      }).webp().toFile(path.join(testFixtureDir, 'public/existing.webp'));
     });
 
     after(async () => {
@@ -158,6 +179,34 @@ describe('react-html Engine Test Suite', () => {
       // Check island JS bundle was generated
       const islandJsExists = await fs.stat(path.join(outDir, 'assets/islands/Toggle.js')).then(() => true).catch(() => false);
       assert.ok(islandJsExists, 'Toggle.js island bundle should exist in assets/islands');
+
+      // Check WebP image was created automatically and non-webp image was never copied
+      assert.ok(result.images.length > 0, 'Should have converted images');
+      const webpExists = await fs.stat(path.join(outDir, 'banner.webp')).then(() => true).catch(() => false);
+      assert.ok(webpExists, 'banner.webp should exist in outDir');
+      const pngExists = await fs.stat(path.join(outDir, 'banner.png')).then(() => true).catch(() => false);
+      assert.equal(pngExists, false, 'banner.png should NEVER be copied when webp conversion is enabled');
+
+      // Check existing .webp in public was copied
+      const existingWebpExists = await fs.stat(path.join(outDir, 'existing.webp')).then(() => true).catch(() => false);
+      assert.ok(existingWebpExists, 'existing.webp should be copied to outDir');
+    });
+
+    test('skips image conversion when webp: false is configured', async () => {
+      // Clean outDir
+      await fs.rm(outDir, { recursive: true, force: true });
+      const result = await build({
+        root: testFixtureDir,
+        outDir: 'dist',
+        minify: true,
+        webp: false
+      });
+
+      assert.equal(result.images.length, 0);
+      const webpExists = await fs.stat(path.join(outDir, 'banner.webp')).then(() => true).catch(() => false);
+      assert.equal(webpExists, false, 'banner.webp should not exist when webp: false');
+      const pngExists = await fs.stat(path.join(outDir, 'banner.png')).then(() => true).catch(() => false);
+      assert.ok(pngExists, 'banner.png should still be copied from public');
     });
   });
 

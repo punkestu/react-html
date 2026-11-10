@@ -4,6 +4,7 @@ import { loadPageModule, clearCache } from './core/loader.js';
 import { renderPageToHtml } from './core/renderer.js';
 import { bundleIslands } from './core/bundler.js';
 import { IslandInstance } from './core/island-registry.js';
+import { convertImagesToWebp, WebpOptions, ConvertedImage, DEFAULT_RASTER_EXTENSIONS } from './core/image-processor.js';
 
 export { Island, island } from './core/island.js';
 export type { IslandProps } from './core/island.js';
@@ -14,6 +15,8 @@ export { bundleIslands } from './core/bundler.js';
 export type { ClientRuntime, BundlerOptions } from './core/bundler.js';
 export { createEngine, ReactHtmlEngine } from './server/engine.js';
 export type { EngineOptions } from './server/engine.js';
+export { convertImagesToWebp, DEFAULT_RASTER_EXTENSIONS };
+export type { WebpOptions, ConvertedImage };
 
 export interface BuildConfig {
   root?: string;
@@ -22,11 +25,13 @@ export interface BuildConfig {
   publicDir?: string;
   minify?: boolean;
   clientRuntime?: 'react' | 'preact';
+  webp?: boolean | WebpOptions;
 }
 
 export interface BuildResult {
   pages: { input: string; output: string }[];
   islands: string[];
+  images: ConvertedImage[];
   outDir: string;
 }
 
@@ -79,12 +84,39 @@ export async function build(config: BuildConfig = {}): Promise<BuildResult> {
   // Ensure output directory exists and is clean
   await fs.mkdir(outDir, { recursive: true });
 
+  const webpOption = config.webp;
+  const isWebpEnabled =
+    typeof webpOption === 'boolean'
+      ? webpOption
+      : (webpOption?.enabled ?? true);
+  const webpConfig: WebpOptions = typeof webpOption === 'object' ? webpOption : {};
+  const keepOriginal = webpConfig.keepOriginal ?? false;
+
   // Copy public static directory if present
   const publicDir = path.resolve(root, config.publicDir || 'public');
+  let publicDirExists = false;
   try {
     const publicStat = await fs.stat(publicDir);
     if (publicStat.isDirectory()) {
-      await fs.cp(publicDir, outDir, { recursive: true });
+      publicDirExists = true;
+      if (isWebpEnabled && !keepOriginal) {
+        // Never copy non-webp raster images
+        const rasterExts = (webpConfig.extensions || DEFAULT_RASTER_EXTENSIONS).map(ext =>
+          ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`
+        );
+        await fs.cp(publicDir, outDir, {
+          recursive: true,
+          filter: (source) => {
+            const ext = path.extname(source).toLowerCase();
+            if (rasterExts.includes(ext)) {
+              return false; // Skip copying original non-webp raster images
+            }
+            return true;
+          }
+        });
+      } else {
+        await fs.cp(publicDir, outDir, { recursive: true });
+      }
     }
   } catch {
     // Public directory optional
@@ -134,12 +166,26 @@ export async function build(config: BuildConfig = {}): Promise<BuildResult> {
     });
   }
 
+  // Convert raster images to WebP unless explicitly disabled
+  let convertedImages: ConvertedImage[] = [];
+  if (isWebpEnabled) {
+    if (publicDirExists) {
+      // Convert images from publicDir into outDir as .webp
+      const fromPublic = await convertImagesToWebp(publicDir, { ...webpConfig, keepOriginal: true }, outDir);
+      convertedImages.push(...fromPublic);
+    }
+    // Also convert any images that might directly reside in outDir
+    const fromOutDir = await convertImagesToWebp(outDir, { ...webpConfig, keepOriginal });
+    convertedImages.push(...fromOutDir);
+  }
+
   // Cleanup compile cache
   await clearCache();
 
   return {
     pages: processedPages,
     islands: bundledIslands,
+    images: convertedImages,
     outDir
   };
 }

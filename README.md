@@ -43,11 +43,14 @@ npm link
 ### CLI Usage
 
 ```bash
-# Build static site to dist/ (with code splitting, islands are ~800 B each)
+# Build static site to dist/ (with code splitting & automatic WebP image optimization)
 react-html build
 
 # Ultra-light Preact mode (drops total framework chunk to ~24 KB!)
 react-html build --preact
+
+# Disable automatic WebP image conversion
+react-html build --no-webp
 
 # Build with custom pages or output directory
 react-html build --pages src/pages --out dist
@@ -250,6 +253,25 @@ react-html build --preact
 
 ---
 
+## 🖼️ Automatic WebP Image Optimization
+
+On build, `react-html` automatically scans raster images in your static assets (`.png`, `.jpg`, `.jpeg`, `.gif`, `.tiff`, `.bmp`) and converts them into optimized, high-performance `.webp` format.
+
+- **Automatic Conversion**: Runs out of the box during `react-html build`.
+- **Exclusive WebP Output**: Non-webp images are never copied to the output directory; only `.webp` images are output in `dist/`.
+- **Opt-Out Flag**: Disable conversion anytime using `--no-webp` (or `webp: false` in `build()`), which preserves and copies images in their original formats.
+- **Quality Control**: Custom quality settings via `--webp-quality <1-100>` (default: 80).
+
+```bash
+# Disable WebP conversion
+react-html build --no-webp
+
+# Custom WebP quality (1-100)
+react-html build --webp-quality 90
+```
+
+---
+
 ## 💻 Programmatic API
 
 You can also run `react-html` programmatically from your Node.js scripts:
@@ -261,10 +283,16 @@ const result = await build({
   root: process.cwd(),
   pagesDir: 'src/pages',
   outDir: 'dist',
-  minify: true
+  minify: true,
+  // WebP options (enabled by default)
+  webp: {
+    enabled: true,       // Set to false to disable (copies original formats)
+    quality: 80,         // 1-100 (default: 80)
+    keepOriginal: false  // Keep original non-webp files (default: false)
+  }
 });
 
-console.log(`Compiled ${result.pages.length} pages and ${result.islands.length} reactive islands.`);
+console.log(`Compiled ${result.pages.length} pages, ${result.islands.length} islands, and optimized ${result.images.length} images.`);
 ```
 
 ---

@@ -44,6 +44,7 @@ export default function HomePage() {
 
       {/* Reactive Counter Island (Preact/React) */}
       <Counter initialCount={10} step={2} />
+      <Counter initialCount={10} step={2} />
 
       {/* Reactive Tabs Island */}
       <Tabs defaultTab="islands" />
