@@ -1,6 +1,6 @@
 {
   "name": "@punkestu/react-html",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Engine to convert React/JSX to pure HTML with selective reactive island compilation",
   "type": "module",
   "bin": {
