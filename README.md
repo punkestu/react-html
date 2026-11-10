@@ -267,36 +267,10 @@ Run the automated test suite powered by Node.js test runner:
 npm test
 ```
 
----
-
-## 🚢 CI/CD & Automated Publishing
-
-This repository includes a GitHub Actions workflow (`.github/workflows/publish.yml`) that automatically tests, builds, and publishes the package to npm whenever changes are pushed to the `main` branch.
-
-### How It Works
-1. Runs on every `push` to `main` (and via manual `workflow_dispatch`).
-2. Checks out the code and sets up Node.js 22.
-3. Installs dependencies (`npm ci`), runs the test suite (`npm test`), and builds the package (`npm run build`).
-4. **Idempotent check**: Inspects whether the local `package.json` version is already published on npm.
-   - If the version has already been published, publishing is safely skipped without failing the pipeline.
-   - If a new version is detected, it runs `npm publish --access public --provenance`.
-
-### Setup Requirements (Repository Secrets)
-To enable automated publishing, configure the `NPM_TOKEN` secret in GitHub:
-1. Generate an npm access token on [npmjs.com](https://www.npmjs.com) (Account Settings -> **Access Tokens** -> **Generate New Token** with **Automation** or granular package write permissions).
-2. Go to your GitHub repository: **Settings** -> **Secrets and variables** -> **Actions**.
-3. Click **New repository secret**, name it `NPM_TOKEN`, and paste your token value.
-
-### Releasing a New Version
-To publish a new version to npm:
-```bash
-# Bump version (patch, minor, or major)
-npm version patch
-
-# Push the commit and tag to main
-git push origin main --follow-tags
-```
-The GitHub Actions workflow will automatically verify tests and publish the new release to npm.
+### Continuous Integration (CI)
+Automated testing is configured via GitHub Actions in [`.github/workflows/test.yml`](.github/workflows/test.yml):
+- Runs automatically on every `push` and `pull_request` targeting `main`.
+- Matrix test strategy executes builds (`npm run build`) and unit tests (`npm test`) across both **Node.js 20 LTS** and **Node.js 22 LTS**.
 
 ---
 
